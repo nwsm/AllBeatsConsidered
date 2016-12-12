@@ -1,0 +1,97 @@
+<script type="text/javascript" src="spotify-web-api.js"></script>
+
+<script type="text/javascript">
+var songid=[];
+var accesstoken = 'PUT ACCESS TOKEN HERE';
+var nprurl="";
+var songs=[];
+var counter=0;
+//hard coded. don't want to scrape links. Maybe later
+var urls=[
+	'http://www.npr.org/programs/all-things-considered/2016/12/09/504929290?showDate=2016-12-09',
+	'http://www.npr.org/programs/all-things-considered/2016/12/08/504799673?showDate=2016-12-08',
+	'http://www.npr.org/programs/all-things-considered/2016/12/07/504657323?showDate=2016-12-07',
+	'http://www.npr.org/programs/all-things-considered/2016/12/06/504541078?showDate=2016-12-06',
+	'http://www.npr.org/programs/all-things-considered/2016/12/05/504401819?showDate=2016-12-05',
+	'http://www.npr.org/programs/all-things-considered/2016/12/02/504108032?showDate=2016-12-02',
+	'http://www.npr.org/programs/all-things-considered/2016/12/01/503961417?showDate=2016-12-01',
+	'http://www.npr.org/programs/all-things-considered/2016/11/30/503841485?showDate=2016-11-30',
+	'http://www.npr.org/programs/all-things-considered/2016/11/29/503736271?showDate=2016-11-29'];
+function getHTML(nprurl){
+	songid=[]; //reset songid array.
+	nprurl=urls[counter];
+	counter++;
+	console.log(nprurl); //the line below is the YQL query that will find the divs that use the 'song-meta-wrap' class
+				// which is where NPR puts the interlude songs.
+	var query = "select * from html where url = '"+nprurl+"' and xpath=\"//div[contains(@class,'song-meta-wrap')]\"&format=json";
+	var yqlrequest='http://query.yahooapis.com/v1/public/yql?q='+query;
+    	var xmlHttp = new XMLHttpRequest();
+    	xmlHttp.open( "GET",yqlrequest, false ); //Synchronous request. This is deprecated. Sends query to YQL.
+    	xmlHttp.send( null );
+	var data=xmlHttp.responseText; //Get JSON YQL response.
+	var jsondata=JSON.parse(data);
+	var count=jsondata["query"].results.div.length; //See how many songs there are.
+	for(var i=0; i<count; i++){
+		songs.push(["",""]); //Fill outer array with correct number of inner arrays that will contain title,artist.
+	}
+	for(var i=0; i<count; i++) {
+		try{	
+			songs[i][0]=jsondata["query"].results.div[i].span[0].content; //title
+			songs[i][1]=jsondata["query"].results.div[i].span[1].content; //artist
+			console.log(songs[i][1]+" - "+songs[i][0]);
+			searchTrack(songs[i][0],songs[i][1]);
+		}catch(e){
+			console.log(e); //Spotify error
+			console.log("possible content empty from: " + nprurl); //one of the songs was missing a title or artist. Or NPR had an empty div.
+		}			
+	}
+	document.getElementById("nexturl").innerHTML=urls[counter++]; //update HTML
+	document.getElementById("inserturl").innerHTML=urls[counter];
+
+}
+function searchTrack(title,artist){ //this works without an access token.
+	var spotifyApi = new SpotifyWebApi();
+	spotifyApi.setAccessToken(accesstoken);
+	var search='artist:'+artist+' '+title;
+	spotifyApi.searchTracks(search) //send search request to API
+	  .then(function(data) {
+		try{
+			songid.push(data.tracks.items[0].uri); //push song uri from Spotify to array to be added later
+		}catch(e){		
+			console.log('no result');
+		}
+	  }, function(err) {
+		console.error(err);
+	  });	  
+}
+function addTracks(){
+	var spotifyApi = new SpotifyWebApi();
+	spotifyApi.setAccessToken(accesstoken);
+	spotifyApi.addTracksToPlaylist('12127460245','1qO3XzZcwh74JaZ2aQfBNc',songid) //add the array of tracks to the playlist
+	  .then(function(data) {
+		console.log('insert track',data); //print response of API
+	  }, function(err) {
+		console.error(err);
+		console.log(spotifyApi.getAccessToken());
+	  });
+}
+
+</script>
+<html>
+Next URL to get:
+<p id="nexturl">
+http://www.npr.org/programs/all-things-considered/2016/12/09/504929290?showDate=2016-12-09
+</p>
+<form onsubmit="console.log(getHTML()); return false;">
+  <input type="submit" value="Get Tracks">
+</form>
+<form onsubmit="console.log(addTracks()); return false;">
+  <input type="submit" value="Insert Tracks">
+</form>
+Insert From:
+<p id="inserturl">
+
+</p>
+
+</html>
+
